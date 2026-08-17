@@ -110,6 +110,35 @@ FIGS_AFTER_PARA = {
     ('五、双场景比较：四条共性规律', 1): ('fig6_comparison_laws.png', '图6　双场景比较与四条共性规律', 14.0),
 }
 
+def add_formula(doc, img, number='1'):
+    p = doc.add_paragraph(); p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    pf = p.paragraph_format
+    pf.space_before = Pt(6); pf.space_after = Pt(6)
+    pf.line_spacing_rule = WD_LINE_SPACING.SINGLE
+    p.add_run().add_picture(FIG + img, width=Cm(5.6))
+    r = p.add_run('　　（' + number + '）'); cjk(r, SONG, 11)
+
+
+def add_table(doc, rows, caption=None):
+    if caption:
+        c = doc.add_paragraph(); c.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        cf = c.paragraph_format
+        cf.space_before = Pt(8); cf.space_after = Pt(3)
+        cf.line_spacing_rule = WD_LINE_SPACING.SINGLE
+        r = c.add_run(caption); cjk(r, HEI, 10.5, True)
+    tbl = doc.add_table(rows=len(rows), cols=len(rows[0]))
+    tbl.style = 'Table Grid'
+    tbl.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    for ri, row in enumerate(rows):
+        for ci, cell in enumerate(row):
+            tc = tbl.cell(ri, ci)
+            tc.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER if ri == 0 else WD_ALIGN_PARAGRAPH.LEFT
+            rr = tc.paragraphs[0].add_run(cell)
+            cjk(rr, HEI if ri == 0 else SONG, 9, bold=(ri == 0))
+            tc.paragraphs[0].paragraph_format.line_spacing = 1.15
+            tc.paragraphs[0].paragraph_format.space_after = Pt(1)
+
+
 cur_head = None
 para_idx = 0
 in_refs = False
@@ -118,6 +147,31 @@ while i < len(lines):
     ln = lines[i].rstrip()
     i += 1
     if not ln.strip() or ln.strip() == '---':
+        continue
+
+    # 显示公式（$$...$$ 单行）
+    if ln.strip().startswith('$$'):
+        add_formula(doc, 'formula1.png', '1')
+        continue
+
+    # 表格标题行（**表1...**）：读取其后的 markdown 管道表
+    if ln.startswith('**表') and '|' not in ln:
+        cap = re.sub(r'\*\*', '', ln).strip()
+        while i < len(lines) and not lines[i].strip():
+            i += 1  # 跳过标题与表之间的空行
+        rows = []
+        while i < len(lines) and lines[i].lstrip().startswith('|'):
+            cells = [c.strip() for c in lines[i].strip().strip('|').split('|')]
+            i += 1
+            if all(set(c) <= set('-: ') for c in cells):
+                continue  # 分隔行
+            rows.append(cells)
+        if rows:
+            add_table(doc, rows, cap)
+        continue
+
+    # 防护：漏网的管道表行不作为正文渲染
+    if ln.lstrip().startswith('|'):
         continue
 
     # 标题
